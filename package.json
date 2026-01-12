@@ -1,13 +1,13 @@
 {
 	"name": "@liguelead/n8n-nodes-liguelead",
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"private": false,
 	"description": "Community node for n8n to send SMS and voice calls using the LigueLead API",
 	"license": "MIT",
 	"repository": {
-    "type": "git",
-    "url": "https://github.com/ligue-lead-tech/n8n"
-  },
+		"type": "git",
+		"url": "https://github.com/ligue-lead-tech/n8n"
+	},
 	"homepage": "https://github.com/ligue-lead-tech/n8n#readme",
 	"keywords": [
 		"n8n-community-node-package",
