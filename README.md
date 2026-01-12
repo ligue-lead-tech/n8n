@@ -1,45 +1,29 @@
 # LigueLead – n8n Custom Node
 
-Node customizado do **n8n** para integração com a **API da LigueLead**, permitindo o envio de **SMS**, **ligações com áudio pré-existente**.
+Custom **n8n** node for integration with the **LigueLead API**, allowing the sending of **SMS messages** and **voice calls using pre-uploaded audio**.
 
-Este node foi projetado com foco em **extensibilidade**, **manutenção simples** e **organização**, permitindo adicionar novas ações sem alterar o core do node.
-
----
-
-## 📌 Funcionalidades
-
-Atualmente o node suporta:
-
-- 📩 Envio de **SMS**
-- 📞 Envio de **ligações** usando um `voice_upload_id`
+This node was designed with a strong focus on **extensibility**, **easy maintenance**, and **clean architecture**, making it simple to add new actions without modifying the core node logic.
 
 ---
 
-## 🧱 Estrutura do Projeto
+## 📌 Features
 
-```
-nodes/
- └── LlSend/
-     ├── LlSend.node.ts
-     └── operations/
-         ├── index.ts
-         ├── types.ts
-         ├── utils.ts
-         ├── sendSms.operation.ts
-         ├── sendVoice.operation.ts
-```
+Currently, the node supports:
+
+- 📩 **SMS sending**
+- 📞 **Voice calls** using a `voice_upload_id`
 
 ---
 
-## 🔐 Credenciais (LigueLead API)
+## 🔐 Credentials (LigueLead API)
 
-| Campo     | Descrição                       |
+| Field     | Description                     |
 | --------- | ------------------------------- |
 | Base URL  | https://api.liguelead.com.br/v1 |
-| API Token | Token de autenticação           |
-| App ID    | Identificador da aplicação      |
+| API Token | Authentication token            |
+| App ID    | Application identifier          |
 
-Headers enviados automaticamente:
+Headers sent automatically:
 
 ```
 api-token: <API_TOKEN>
@@ -48,55 +32,54 @@ app-id: <APP_ID>
 
 ---
 
-## ⚙️ Como utilizar
+## ⚙️ How to Use
 
-1. Crie a credencial **LigueLead API**
-2. Arraste o node **LigueLead** para o workflow
-3. Escolha a operação desejada
+1. Create the **LigueLead API** credential
+2. Drag the **LigueLead** node into your workflow
+3. Select the desired operation
 
 ---
 
-## 🧩 Operações
+## 🧩 Operations
 
-### 📩 Enviar SMS (sendSms)
+### 📩 Send SMS (sendSms)
 
-Exemplo de input:
+Required fields:
 
-```
+- phones: string[]
+- message: string
+- title: string
+
+Optional field:
+
+- isFlash: boolean (SMS type)
+
+Example:
+
+```json
 {
-  "phones": ["5511999999999"],
-  "message": "Olá!"
+	"phones": ["5511999999999"],
+	"message": "Hello!",
+	"title": "Test"
 }
 ```
 
 ---
 
-### 📞 Enviar Ligação (sendVoice)
+### 📞 Send Voice Call (sendVoice)
 
-Campos obrigatórios:
+Required fields:
 
 - phones: string[]
 - voice_upload_id: number
 - title: string
 
-Exemplo:
+Example:
 
-```
+```json
 {
-  "title": "Campanha Julho",
-  "voice_upload_id": 123,
-  "phones": ["5511999999999"]
+	"title": "July Campaign",
+	"voice_upload_id": 123,
+	"phones": ["5511999999999"]
 }
 ```
-
----
-
-## ➕ Adicionando novas operações
-
-1. Crie um novo arquivo em `operations/`
-2. Exporte um `OperationDef`
-3. Registre no array `operations` em `operations/index.ts`
-
-A nova operação aparecerá automaticamente no dropdown.
-
----
