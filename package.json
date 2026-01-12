@@ -57,5 +57,8 @@
 	},
 	"overrides": {
 		"change-case": "4.1.2"
+	},
+	"dependencies": {
+		"@liguelead/n8n-nodes-liguelead": "^0.0.3"
 	}
 }

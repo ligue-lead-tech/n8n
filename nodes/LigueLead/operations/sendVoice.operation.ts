@@ -1,11 +1,20 @@
 import type { OperationDef } from './types';
-import { getBaseUrl, getVoiceCommon } from './utils';
+import { getBaseUrl } from './utils';
 
 export const sendVoiceOperation: OperationDef = {
 	value: 'sendVoice',
 	name: 'Enviar Ligação',
 	description: 'Envia ligação usando voice_upload_id já existente',
 	properties: [
+		{
+			displayName: 'Title',
+			name: 'title',
+			type: 'string',
+			default: 'title',
+			required: true,
+			displayOptions: { show: { operation: ['sendVoice'] } },
+			description: 'Nome do campo no input JSON com o title',
+		},
 		{
 			displayName: 'Voice Upload ID',
 			name: 'voiceUploadId',
@@ -16,22 +25,13 @@ export const sendVoiceOperation: OperationDef = {
 			description: 'ID do áudio previamente enviado (voice_upload_id)',
 		},
 		{
-			displayName: 'Phones Field',
-			name: 'phonesField',
+			displayName: 'Phones',
+			name: 'phones',
 			type: 'string',
 			default: 'phones',
 			required: true,
-			displayOptions: { show: { operation: ['sendVoice', 'sendVoiceWithUpload'] } },
+			displayOptions: { show: { operation: ['sendVoice'] } },
 			description: 'Nome do campo no input JSON com array de telefones',
-		},
-		{
-			displayName: 'Title Field',
-			name: 'titleField',
-			type: 'string',
-			default: 'title',
-			required: true,
-			displayOptions: { show: { operation: ['sendVoice', 'sendVoiceWithUpload'] } },
-			description: 'Nome do campo no input JSON com o title',
 		},
 	],
 
@@ -39,7 +39,8 @@ export const sendVoiceOperation: OperationDef = {
 		const baseUrl = await getBaseUrl();
 		const url = `${baseUrl}/voice`;
 
-		const { phones, title } = getVoiceCommon(ctx, itemIndex);
+		const title = ctx.getNodeParameter('title', itemIndex) as string;
+		const phones = ctx.getNodeParameter('phones', itemIndex) as Array<string>;
 
 		const voiceUploadId = ctx.getNodeParameter('voiceUploadId', itemIndex) as number;
 		if (!voiceUploadId || Number.isNaN(voiceUploadId)) {
