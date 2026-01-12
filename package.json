@@ -1,0 +1,56 @@
+{
+	"name": "n8n-nodes-liguelead",
+	"version": "0.1.1",
+	"description": "Community node for n8n to send SMS and voice calls using the LigueLead API",
+	"license": "MIT",
+	"homepage": "",
+	"keywords": [
+		"n8n-community-node-package",
+		"n8n-nodes",
+		"liguelead",
+		"sms",
+		"voice",
+		"telephony"
+	],
+	"author": {
+		"name": "Henrique Corraro",
+		"email": "henriquecorraro@liguelead.com.br"
+	},
+	"scripts": {
+		"build": "n8n-node build && mkdir -p dist/nodes/LigueLead dist/credentials && cp nodes/LigueLead/logo.svg dist/nodes/LigueLead/logo.svg && cp credentials/logo.svg dist/credentials/logo.svg",
+		"build:watch": "tsc --watch",
+		"dev": "n8n-node dev",
+		"lint": "n8n-node lint",
+		"lint:fix": "n8n-node lint --fix",
+		"release": "n8n-node release",
+		"prepublishOnly": "n8n-node prerelease"
+	},
+	"files": [
+		"dist",
+		"src/nodes/**/logo.svg"
+	],
+	"n8n": {
+		"n8nNodesApiVersion": 1,
+		"strict": true,
+		"credentials": [
+			"dist/credentials/LlApi.credentials.js"
+		],
+		"nodes": [
+			"dist/nodes/LigueLead/LigueLead.node.js"
+		]
+	},
+	"devDependencies": {
+		"@n8n/node-cli": "*",
+		"cpx": "^1.2.1",
+		"eslint": "9.32.0",
+		"prettier": "3.6.2",
+		"release-it": "^19.0.4",
+		"typescript": "5.9.2"
+	},
+	"peerDependencies": {
+		"n8n-workflow": "*"
+	},
+	"overrides": {
+		"change-case": "4.1.2"
+	}
+}
