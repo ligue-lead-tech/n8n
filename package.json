@@ -4,7 +4,11 @@
 	"private": false,
 	"description": "Community node for n8n to send SMS and voice calls using the LigueLead API",
 	"license": "MIT",
-	"homepage": "",
+	"repository": {
+    "type": "git",
+    "url": "https://github.com/ligue-lead-tech/n8n"
+  },
+	"homepage": "https://github.com/ligue-lead-tech/n8n#readme",
 	"keywords": [
 		"n8n-community-node-package",
 		"n8n-nodes",
