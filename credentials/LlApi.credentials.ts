@@ -9,7 +9,7 @@ import type {
 export class LlApi implements ICredentialType {
 	name = 'llApi';
 	displayName = 'LigueLead API';
-	documentationUrl = 'https://seus-docs-ou-repo';
+	documentationUrl = 'https://github.com/ligue-lead-tech/n8n';
 	icon: Icon = 'file:logo.svg'; 
 	properties: INodeProperties[] = [
 		{
