@@ -15,7 +15,7 @@ export class LigueLead implements INodeType {
 		name: 'ligueLead',
 		group: ['output'],
 		version: 3,
-		description: 'Envio de SMS e Ligações via LigueLead API',
+		description: 'Envio de SMS e Ligações via API da LigueLead',
 		usableAsTool: true,
 		defaults: { name: 'LigueLead' },
 		icon: 'file:logo.svg',
