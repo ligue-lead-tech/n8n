@@ -24,12 +24,12 @@ export class LigueLead implements INodeType {
 		credentials: [{ name: 'llApi', required: true }],
 		properties: [
 			{
-			displayName: 'Operação',
-			name: 'operation',
-			type: 'options',
-			noDataExpression: true, // ✅ obrigatório
-			options: operationOptions as unknown as INodePropertyOptions[],
-			default: '', // ✅ fixo
+				displayName: 'Operação',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true, // ✅ obrigatório
+				options: operationOptions as unknown as INodePropertyOptions[],
+				default: '', // ✅ fixo
 			} as INodeProperties,
 
 			...operationProperties,

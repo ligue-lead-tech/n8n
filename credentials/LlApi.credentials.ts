@@ -3,14 +3,14 @@ import type {
 	ICredentialTestRequest,
 	ICredentialType,
 	INodeProperties,
-	Icon
+	Icon,
 } from 'n8n-workflow';
 
 export class LlApi implements ICredentialType {
 	name = 'llApi';
 	displayName = 'LigueLead API';
 	documentationUrl = 'https://github.com/ligue-lead-tech/n8n';
-	icon: Icon = 'file:logo.svg'; 
+	icon: Icon = 'file:logo.svg';
 	properties: INodeProperties[] = [
 		{
 			displayName: 'Base URL',
@@ -40,6 +40,7 @@ export class LlApi implements ICredentialType {
 		type: 'generic',
 		properties: {
 			headers: {
+				source: 'n8n',
 				'api-token': '={{$credentials.apiToken}}',
 				'app-id': '={{$credentials.appId}}',
 			},

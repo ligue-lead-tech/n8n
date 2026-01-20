@@ -76,9 +76,6 @@ export const sendSmsOperation: OperationDef = {
 		const response = await ctx.helpers.requestWithAuthentication.call(ctx, 'llApi', {
 			method: 'POST',
 			url,
-			headers: {
-				source: 'n8n',
-			},
 			json: true,
 			body,
 		});
