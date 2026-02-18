@@ -1,5 +1,6 @@
 import type { OperationDef } from './types';
 import { getBaseUrl } from './utils';
+import { NodeOperationError } from 'n8n-workflow';
 
 export const sendSmsOperation: OperationDef = {
 	value: 'sendSms',
@@ -53,9 +54,9 @@ export const sendSmsOperation: OperationDef = {
 		const phones = ctx.getNodeParameter('phones', itemIndex) as Array<string>;
 		const isFlash = ctx.getNodeParameter('isFlash', itemIndex) as boolean;
 
-		if (!title?.trim()) throw new Error('Informe "Title".');
-		if (!message?.trim()) throw new Error('Informe "Message".');
-		if (!phones.length) throw new Error('Informe ao menos 1 telefone em "Phones".');
+		if (!title?.trim()) throw new NodeOperationError(ctx.getNode(), 'Informe "Title".');
+		if (!message?.trim()) throw new NodeOperationError(ctx.getNode(), 'Informe "Message".');
+		if (!phones.length) throw new NodeOperationError(ctx.getNode(), 'Informe ao menos 1 telefone em "Phones".');
 
 		type bodyType = {
 			title: string;

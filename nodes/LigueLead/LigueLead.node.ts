@@ -52,6 +52,7 @@ export class LigueLead implements INodeType {
 					operation: operationValue,
 					...json,
 				},
+			pairedItem: {item: i},
 			});
 		}
 
