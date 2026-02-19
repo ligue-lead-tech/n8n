@@ -14,10 +14,10 @@ export function getVoiceCommon(ctx: IExecuteFunctions, itemIndex: number) {
 	const title = (items[itemIndex].json)?.[titleField];
 
 	if (!Array.isArray(phones) || phones.length === 0) {
-		throw new Error(`Campo "${phonesField}" precisa ser um array de telefones (phones: string[]).`);
+		throw new Error(`Field "${phonesField}" must be an array of phones (phones: string[]).`);
 	}
 	if (typeof title !== 'string' || !title.trim()) {
-		throw new Error(`Campo "${titleField}" precisa ser uma string (title).`);
+		throw new Error(`Field "${titleField}" must be a string (title).`);
 	}
 
 	return { phonesField, titleField, phones, title };

@@ -1,10 +1,11 @@
+import { NodeOperationError } from 'n8n-workflow';
 import type { OperationDef } from './types';
 import { getBaseUrl } from './utils';
 
 export const sendVoiceOperation: OperationDef = {
 	value: 'sendVoice',
-	name: 'Enviar Ligação',
-	description: 'Envia ligação usando voice_upload_id já existente',
+	name: 'Send Call',
+	description: 'Sends a call using an existing voice_upload_id',
 	properties: [
 		{
 			displayName: 'Title',
@@ -13,7 +14,7 @@ export const sendVoiceOperation: OperationDef = {
 			default: 'title',
 			required: true,
 			displayOptions: { show: { operation: ['sendVoice'] } },
-			description: 'Nome do campo no input JSON com o title',
+			description: 'Name of the field in the input JSON with the title',
 		},
 		{
 			displayName: 'Voice Upload ID',
@@ -22,7 +23,7 @@ export const sendVoiceOperation: OperationDef = {
 			default: 0,
 			required: true,
 			displayOptions: { show: { operation: ['sendVoice'] } },
-			description: 'ID do áudio previamente enviado (voice_upload_id)',
+			description: 'ID of the previously uploaded audio (voice_upload_id)',
 		},
 		{
 			displayName: 'Phones',
@@ -31,7 +32,7 @@ export const sendVoiceOperation: OperationDef = {
 			default: 'phones',
 			required: true,
 			displayOptions: { show: { operation: ['sendVoice'] } },
-			description: 'Nome do campo no input JSON com array de telefones',
+			description: 'Name of the field in the input JSON with the phone number array',
 		},
 	],
 
@@ -44,7 +45,7 @@ export const sendVoiceOperation: OperationDef = {
 
 		const voiceUploadId = ctx.getNodeParameter('voiceUploadId', itemIndex) as number;
 		if (!voiceUploadId || Number.isNaN(voiceUploadId)) {
-			throw new Error('Informe um Voice Upload ID válido.');
+			throw new NodeOperationError(ctx.getNode(), 'Please provide a valid Voice Upload ID.');
 		}
 
 		const body = { title, voice_upload_id: voiceUploadId, phones };

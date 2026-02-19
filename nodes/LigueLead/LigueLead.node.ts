@@ -15,7 +15,7 @@ export class LigueLead implements INodeType {
 		name: 'ligueLead',
 		group: ['output'],
 		version: 3,
-		description: 'Envio de SMS e Ligações via API da LigueLead',
+		description: 'Send SMS and calls via LigueLead API',
 		usableAsTool: true,
 		defaults: { name: 'LigueLead' },
 		icon: 'file:logo.svg',
@@ -24,12 +24,12 @@ export class LigueLead implements INodeType {
 		credentials: [{ name: 'llApi', required: true }],
 		properties: [
 			{
-				displayName: 'Operação',
+				displayName: 'Operation',
 				name: 'operation',
 				type: 'options',
-				noDataExpression: true, // ✅ obrigatório
+				noDataExpression: true, // ✅ required
 				options: operationOptions as unknown as INodePropertyOptions[],
-				default: '', // ✅ fixo
+				default: '', // ✅ fixed
 			} as INodeProperties,
 
 			...operationProperties,

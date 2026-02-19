@@ -4,8 +4,8 @@ import { NodeOperationError } from 'n8n-workflow';
 
 export const sendSmsOperation: OperationDef = {
 	value: 'sendSms',
-	name: 'Enviar SMS',
-	description: 'Envia SMS via endpoint /v1/sms',
+	name: 'Send SMS',
+	description: 'Sends SMS via endpoint /v1/sms',
 	properties: [
 		{
 			displayName: 'Title',
@@ -14,7 +14,7 @@ export const sendSmsOperation: OperationDef = {
 			required: true,
 			default: '',
 			displayOptions: { show: { operation: ['sendSms'] } },
-			description: 'Título do disparo',
+			description: 'Title of the dispatch',
 		},
 		{
 			displayName: 'Message',
@@ -23,7 +23,7 @@ export const sendSmsOperation: OperationDef = {
 			required: true,
 			default: '',
 			displayOptions: { show: { operation: ['sendSms'] } },
-			description: 'Mensagem que será enviada',
+			description: 'Message to be sent',
 		},
 		{
 			displayName: 'Phones',
@@ -33,7 +33,7 @@ export const sendSmsOperation: OperationDef = {
 			default: '',
 			placeholder: '5519995554219,551988877766',
 			displayOptions: { show: { operation: ['sendSms'] } },
-			description: 'Lista de telefones separados por vírgula',
+			description: 'List of phone numbers separated by comma',
 		},
 		{
 			displayName: 'Is Flash',
@@ -41,7 +41,7 @@ export const sendSmsOperation: OperationDef = {
 			type: 'boolean',
 			default: false,
 			displayOptions: { show: { operation: ['sendSms'] } },
-			description: 'Whether true, envia como SMS Flash (is_flash)',
+			description: 'Whether true, sends as Flash SMS (is_flash)',
 		},
 	],
 
@@ -54,9 +54,9 @@ export const sendSmsOperation: OperationDef = {
 		const phones = ctx.getNodeParameter('phones', itemIndex) as Array<string>;
 		const isFlash = ctx.getNodeParameter('isFlash', itemIndex) as boolean;
 
-		if (!title?.trim()) throw new NodeOperationError(ctx.getNode(), 'Informe "Title".');
-		if (!message?.trim()) throw new NodeOperationError(ctx.getNode(), 'Informe "Message".');
-		if (!phones.length) throw new NodeOperationError(ctx.getNode(), 'Informe ao menos 1 telefone em "Phones".');
+		if (!title?.trim()) throw new NodeOperationError(ctx.getNode(), 'Please provide "Title".');
+		if (!message?.trim()) throw new NodeOperationError(ctx.getNode(), 'Please provide "Message".');
+		if (!phones.length) throw new NodeOperationError(ctx.getNode(), 'Please provide at least 1 phone number in "Phones".');
 
 		type bodyType = {
 			title: string;
@@ -71,7 +71,7 @@ export const sendSmsOperation: OperationDef = {
 			phones,
 		};
 
-		// API usa is_flash (boolean)
+		// API uses is_flash (boolean)
 		if (isFlash) body.is_flash = true;
 
 		const response = await ctx.helpers.requestWithAuthentication.call(ctx, 'llApi', {
