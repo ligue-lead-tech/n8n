@@ -42,7 +42,7 @@ export class LigueLead implements INodeType {
 
 		for (let i = 0; i < items.length; i++) {
 			const operationValue = this.getNodeParameter('operation', i) as string;
-			const op = getOperation(operationValue);
+			const op = getOperation(this, operationValue);
 
 			const json = (await op.execute(this, i)) as Record<string, unknown>;
 
