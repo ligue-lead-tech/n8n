@@ -46,7 +46,7 @@ export const sendSmsOperation: OperationDef = {
 	],
 
 	async execute(ctx, itemIndex) {
-		const baseUrl = await getBaseUrl();
+		const baseUrl = await getBaseUrl(ctx);
 		const url = `${baseUrl}/sms`;
 
 		const title = ctx.getNodeParameter('title', itemIndex) as string;
@@ -74,7 +74,7 @@ export const sendSmsOperation: OperationDef = {
 		// API uses is_flash (boolean)
 		if (isFlash) body.is_flash = true;
 
-		const response = await ctx.helpers.requestWithAuthentication.call(ctx, 'llApi', {
+		const response = await ctx.helpers.httpRequestWithAuthentication.call(ctx, 'llApi', {
 			method: 'POST',
 			url,
 			json: true,

@@ -37,7 +37,7 @@ export const sendVoiceOperation: OperationDef = {
 	],
 
 	async execute(ctx, itemIndex) {
-		const baseUrl = await getBaseUrl();
+		const baseUrl = await getBaseUrl(ctx);
 		const url = `${baseUrl}/voice`;
 
 		const title = ctx.getNodeParameter('title', itemIndex) as string;
@@ -50,7 +50,7 @@ export const sendVoiceOperation: OperationDef = {
 
 		const body = { title, voice_upload_id: voiceUploadId, phones };
 
-		const response = await ctx.helpers.requestWithAuthentication.call(ctx, 'llApi', {
+		const response = await ctx.helpers.httpRequestWithAuthentication.call(ctx, 'llApi', {
 			method: 'POST',
 			url,
 			json: true,
