@@ -51,8 +51,12 @@ export const sendSmsOperation: OperationDef = {
 
 		const title = ctx.getNodeParameter('title', itemIndex) as string;
 		const message = ctx.getNodeParameter('message', itemIndex) as string;
-		const phones = ctx.getNodeParameter('phones', itemIndex) as Array<string>;
+		const phonesRaw = ctx.getNodeParameter('phones', itemIndex) as string | string[];
 		const isFlash = ctx.getNodeParameter('isFlash', itemIndex) as boolean;
+
+		const phones = Array.isArray(phonesRaw)
+			? phonesRaw.map((p) => p.trim()).filter(Boolean)
+			: phonesRaw.split(',').map((p) => p.trim()).filter(Boolean);
 
 		if (!title?.trim()) throw new NodeOperationError(ctx.getNode(), 'Please provide "Title".');
 		if (!message?.trim()) throw new NodeOperationError(ctx.getNode(), 'Please provide "Message".');

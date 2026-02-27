@@ -41,7 +41,10 @@ export const sendVoiceOperation: OperationDef = {
 		const url = `${baseUrl}/voice`;
 
 		const title = ctx.getNodeParameter('title', itemIndex) as string;
-		const phones = ctx.getNodeParameter('phones', itemIndex) as Array<string>;
+		const phonesRaw = ctx.getNodeParameter('phones', itemIndex) as string | string[];
+		const phones = Array.isArray(phonesRaw)
+			? phonesRaw.map((p) => p.trim()).filter(Boolean)
+			: phonesRaw.split(',').map((p) => p.trim()).filter(Boolean);
 
 		const voiceUploadId = ctx.getNodeParameter('voiceUploadId', itemIndex) as number;
 		if (!voiceUploadId || Number.isNaN(voiceUploadId)) {
