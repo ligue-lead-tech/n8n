@@ -41,19 +41,27 @@ export class LigueLead implements INodeType {
 		const returnData: INodeExecutionData[] = [];
 
 		for (let i = 0; i < items.length; i++) {
-			const operationValue = this.getNodeParameter('operation', i) as string;
-			const op = getOperation(this, operationValue);
+			try {
+				const operationValue = this.getNodeParameter('operation', i) as string;
+				const op = getOperation(this, operationValue);
 
-			const json = (await op.execute(this, i)) as Record<string, unknown>;
+				const json = (await op.execute(this, i)) as Record<string, unknown>;
 
-			returnData.push({
-				json: {
-					ok: true,
-					operation: operationValue,
-					...json,
-				},
-			pairedItem: {item: i},
-			});
+				returnData.push({
+					json: {
+						ok: true,
+						operation: operationValue,
+						...json,
+					},
+					pairedItem: { item: i },
+				});
+			} catch (error) {
+				if (this.continueOnFail()) {
+					returnData.push({ json: { error: (error as Error).message }, pairedItem: { item: i } });
+					continue;
+				}
+				throw error;
+			}
 		}
 
 		return [returnData];
