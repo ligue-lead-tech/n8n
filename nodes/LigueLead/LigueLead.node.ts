@@ -6,6 +6,7 @@ import type {
 	INodeProperties,
 	INodePropertyOptions,
 } from 'n8n-workflow';
+import { NodeConnectionTypes } from 'n8n-workflow';
 
 import { getOperation, operationOptions, operationProperties } from './operations';
 
@@ -16,11 +17,12 @@ export class LigueLead implements INodeType {
 		group: ['output'],
 		version: 3,
 		description: 'Send SMS and calls via LigueLead API',
+		subtitle: '={{$parameter["operation"]}}',
 		usableAsTool: true,
 		defaults: { name: 'LigueLead' },
 		icon: 'file:logo.svg',
-		inputs: ['main'],
-		outputs: ['main'],
+		inputs: [NodeConnectionTypes.Main],
+		outputs: [NodeConnectionTypes.Main],
 		credentials: [{ name: 'llApi', required: true }],
 		properties: [
 			{
