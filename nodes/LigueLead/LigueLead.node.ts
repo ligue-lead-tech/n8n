@@ -5,8 +5,9 @@ import type {
 	INodeTypeDescription,
 	INodeProperties,
 	INodePropertyOptions,
+	JsonObject,
 } from 'n8n-workflow';
-import { NodeConnectionTypes } from 'n8n-workflow';
+import { NodeConnectionTypes, NodeApiError } from 'n8n-workflow';
 
 import { getOperation, operationOptions, operationProperties } from './operations';
 
@@ -62,7 +63,7 @@ export class LigueLead implements INodeType {
 					returnData.push({ json: { error: (error as Error).message }, pairedItem: { item: i } });
 					continue;
 				}
-				throw error;
+				throw new NodeApiError(this.getNode(), error as JsonObject);
 			}
 		}
 
