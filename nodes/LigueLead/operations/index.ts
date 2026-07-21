@@ -3,8 +3,9 @@ import type { OperationDef } from './types';
 
 import { sendSmsOperation } from './sendSms.operation';
 import { sendVoiceOperation } from './sendVoice.operation';
+import { sendRcsOperation } from './sendRcs.operation';
 
-export const operations: OperationDef[] = [sendSmsOperation, sendVoiceOperation];
+export const operations: OperationDef[] = [sendSmsOperation, sendVoiceOperation, sendRcsOperation];
 
 // 1) Dropdown options (dynamic)
 export const operationOptions = operations.map((op) => ({
