@@ -50,7 +50,7 @@ export class LlApi implements ICredentialType {
 	test: ICredentialTestRequest = {
 		request: {
 			method: 'GET',
-			url: '={{$credentials.baseUrl}}/health',
+			url: '={{$credentials.baseUrl}}/voice/uploads',
 		},
 	};
 }
