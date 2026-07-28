@@ -49,14 +49,14 @@ export const sendRcsOperation: OperationDef = {
 			description: 'Plain text to send (max 306 chars). This same text is also used as the SMS fallback if the recipient\'s device does not support RCS.',
 		},
 		{
-			displayName: 'Template Name or ID',
+			displayName: 'Template ID',
 			name: 'templateId',
-			type: 'options',
+			type: 'string',
 			required: true,
 			default: '',
-			typeOptions: { loadOptionsMethod: 'getRcsTemplates' },
+			placeholder: '449dff4b-08c0-40a6-aa18-86dc6f9745bd',
 			displayOptions: { show: { operation: ['sendRcs'], sendAs: ['template'] } },
-			description: 'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>',
+			description: 'ID of the RCS template. Find it in your LigueLead account under RCS Templates.',
 		},
 		{
 			displayName: 'Template Variables',
