@@ -25,7 +25,7 @@ export const sendRcsOperation: OperationDef = {
 			default: '',
 			placeholder: '7b3c1e90-4d2a-4f11-9c8e-2a5b6d0f3e47',
 			displayOptions: { show: { operation: ['sendRcs'] } },
-			description: 'ID of the approved RCS agent (sender brand shown on the device). Use the "List RCS Agents" operation to find it.',
+			description: 'ID of the approved RCS agent (sender brand shown on the device). It must belong to the same App ID as the credential. Use the "List RCS Agents" operation to find it.',
 		},
 		{
 			displayName: 'Send As',
