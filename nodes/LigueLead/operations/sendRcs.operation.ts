@@ -18,6 +18,16 @@ export const sendRcsOperation: OperationDef = {
 			description: 'List of phone numbers separated by comma (national 11-digit, with +55, or DDI)',
 		},
 		{
+			displayName: 'Agent ID',
+			name: 'agentId',
+			type: 'string',
+			required: true,
+			default: '',
+			placeholder: '7b3c1e90-4d2a-4f11-9c8e-2a5b6d0f3e47',
+			displayOptions: { show: { operation: ['sendRcs'] } },
+			description: 'ID of the approved RCS agent (sender brand shown on the device). Use the "List RCS Agents" operation to find it.',
+		},
+		{
 			displayName: 'Send As',
 			name: 'sendAs',
 			type: 'options',
@@ -97,6 +107,11 @@ export const sendRcsOperation: OperationDef = {
 
 		const phonesRaw = ctx.getNodeParameter('phones', itemIndex) as string | string[];
 		const sendAs = ctx.getNodeParameter('sendAs', itemIndex) as 'message' | 'template';
+		const agentId = (ctx.getNodeParameter('agentId', itemIndex) as string)?.trim();
+
+		if (!agentId) {
+			throw new NodeOperationError(ctx.getNode(), 'Please provide "Agent ID". Use the "List RCS Agents" operation to find it.');
+		}
 
 		const phones = Array.isArray(phonesRaw)
 			? phonesRaw.map((p) => p.trim()).filter(Boolean)
@@ -110,12 +125,13 @@ export const sendRcsOperation: OperationDef = {
 
 		type BodyType = {
 			phones: string[];
+			agent_id: string;
 			message?: string;
 			template_id?: string;
 			template_variables?: TemplateVariable[];
 		};
 
-		const body: BodyType = { phones };
+		const body: BodyType = { phones, agent_id: agentId };
 
 		if (sendAs === 'message') {
 			const message = ctx.getNodeParameter('message', itemIndex) as string;

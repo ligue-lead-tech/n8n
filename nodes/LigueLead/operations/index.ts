@@ -5,12 +5,14 @@ import { sendSmsOperation } from './sendSms.operation';
 import { sendVoiceOperation } from './sendVoice.operation';
 import { sendRcsOperation } from './sendRcs.operation';
 import { listRcsTemplatesOperation } from './listRcsTemplates.operation';
+import { listRcsAgentsOperation } from './listRcsAgents.operation';
 
 export const operations: OperationDef[] = [
 	sendSmsOperation,
 	sendVoiceOperation,
 	sendRcsOperation,
 	listRcsTemplatesOperation,
+	listRcsAgentsOperation,
 ];
 
 // 1) Dropdown options (dynamic)
