@@ -7,38 +7,93 @@ import type {
 	INodePropertyOptions,
 	JsonObject,
 } from 'n8n-workflow';
-import { NodeConnectionTypes, NodeApiError } from 'n8n-workflow';
+import { NodeConnectionTypes, NodeApiError, NodeOperationError } from 'n8n-workflow';
 
 import { getOperation, operationOptions, operationProperties } from './operations';
 
-// The LigueLead API returns { error: string } or { error: [{ field, message }] };
-// n8n hides that body behind a generic "request is invalid" message, so surface it.
-function extractApiErrorMessage(error: unknown): string | undefined {
-	const e = error as {
-		context?: { data?: unknown };
-		cause?: { response?: { data?: unknown; body?: unknown } };
-		response?: { data?: unknown; body?: unknown };
-	};
-	const data = (e?.context?.data ??
-		e?.cause?.response?.data ??
-		e?.cause?.response?.body ??
-		e?.response?.data ??
-		e?.response?.body) as { error?: unknown; message?: unknown } | undefined;
-	if (!data || typeof data !== 'object') return undefined;
+// The LigueLead API returns { error: string } or { error: [{ field, message }] }, but the
+// body reaches us in different shapes depending on the n8n version (object, JSON string,
+// Buffer, nested in cause/response/context). Dig it out so the real reason is shown
+// instead of n8n's generic "request is invalid" message.
+function parseBody(value: unknown): unknown {
+	if (value === null || value === undefined) return undefined;
+	// Buffer is a Uint8Array, so this also covers Node buffers
+	if (value instanceof Uint8Array || value instanceof ArrayBuffer) {
+		const bytes = Array.from(new Uint8Array(value), (b) => '%' + b.toString(16).padStart(2, '0'));
+		try {
+			value = decodeURIComponent(bytes.join(''));
+		} catch {
+			return undefined;
+		}
+	}
+	if (typeof value === 'string') {
+		try {
+			return JSON.parse(value);
+		} catch {
+			return value.trim() ? value : undefined;
+		}
+	}
+	return value;
+}
 
-	const err = data.error ?? data.message;
-	let detail: string | undefined;
-	if (typeof err === 'string') detail = err;
-	else if (Array.isArray(err)) {
-		detail = err
-			.map((item: { field?: string; message?: string }) =>
-				item?.field ? `${item.field}: ${item.message}` : String(item?.message ?? item),
+function describeBody(body: unknown): string | undefined {
+	if (typeof body === 'string') return body;
+	if (!body || typeof body !== 'object') return undefined;
+	const data = body as { error?: unknown; errors?: unknown; message?: unknown };
+	const err = data.error ?? data.errors;
+	if (typeof err === 'string') return err;
+	if (Array.isArray(err) && err.length) {
+		return err
+			.map((item: { field?: string; message?: string } | string) =>
+				typeof item === 'string'
+					? item
+					: item?.field
+						? `${item.field}: ${item.message}`
+						: String(item?.message ?? JSON.stringify(item)),
 			)
 			.join('; ');
 	}
-	if (!detail) return undefined;
+	if (err && typeof err === 'object') return describeBody(err);
+	if (typeof data.message === 'string') return data.message;
+	return undefined;
+}
 
-	const status = (error as { httpCode?: string }).httpCode;
+function findApiBody(error: unknown, depth = 0): string | undefined {
+	if (!error || typeof error !== 'object' || depth > 4) return undefined;
+	const e = error as Record<string, unknown>;
+	const response = e.response as Record<string, unknown> | undefined;
+	const context = e.context as Record<string, unknown> | undefined;
+	const candidates = [context?.data, response?.data, response?.body, e.error, e.body, e.errorResponse];
+	for (const candidate of candidates) {
+		const detail = describeBody(parseBody(candidate));
+		if (detail) return detail;
+	}
+	return findApiBody(e.cause, depth + 1) ?? findApiBody(e.errorResponse, depth + 1);
+}
+
+function findHttpStatus(error: unknown, depth = 0): string | undefined {
+	if (!error || typeof error !== 'object' || depth > 4) return undefined;
+	const e = error as Record<string, unknown>;
+	const response = e.response as Record<string, unknown> | undefined;
+	const status = e.httpCode ?? e.statusCode ?? response?.status ?? response?.statusCode;
+	if (status) return String(status);
+	return findHttpStatus(e.cause, depth + 1) ?? findHttpStatus(e.errorResponse, depth + 1);
+}
+
+// Shown in error descriptions so screenshots tell us which package version is installed
+declare const require: (id: string) => unknown;
+const NODE_VERSION = (() => {
+	try {
+		return (require('../../../package.json') as { version?: string }).version ?? 'unknown';
+	} catch {
+		return 'unknown';
+	}
+})();
+
+function extractApiErrorMessage(error: unknown): string | undefined {
+	const detail = findApiBody(error);
+	if (!detail) return undefined;
+	const status = findHttpStatus(error);
 	return status ? `A LigueLead recusou a requisição (HTTP ${status}): ${detail}` : detail;
 }
 
@@ -97,20 +152,20 @@ export class LigueLead implements INodeType {
 					});
 					continue;
 				}
-				if ((error as Error)?.name === 'NodeOperationError') throw error;
-				const apiMessage = extractApiErrorMessage(error);
-				if (error instanceof NodeApiError || (error as Error)?.name === 'NodeApiError') {
-					if (apiMessage) {
-						(error as NodeApiError).message = apiMessage;
-						(error as NodeApiError).description = apiMessage;
-					}
-					throw error;
+				if ((error as Error)?.name === 'NodeOperationError') {
+					const opError = error as NodeOperationError;
+					opError.description = `${opError.description ?? opError.message}\n\n(LigueLead node v${NODE_VERSION})`;
+					throw opError;
 				}
-				throw new NodeApiError(
-					this.getNode(),
-					error as JsonObject,
-					apiMessage ? { message: apiMessage, description: apiMessage } : undefined,
-				);
+				const apiMessage = extractApiErrorMessage(error);
+				if (apiMessage) {
+					throw new NodeOperationError(this.getNode(), apiMessage, {
+						itemIndex: i,
+						description: `${apiMessage}\n\n(LigueLead node v${NODE_VERSION})`,
+					});
+				}
+				if (error instanceof NodeApiError || (error as Error)?.name === 'NodeApiError') throw error;
+				throw new NodeApiError(this.getNode(), error as JsonObject);
 			}
 		}
 
