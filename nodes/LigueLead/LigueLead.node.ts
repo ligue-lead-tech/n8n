@@ -27,15 +27,19 @@ function extractApiErrorMessage(error: unknown): string | undefined {
 	if (!data || typeof data !== 'object') return undefined;
 
 	const err = data.error ?? data.message;
-	if (typeof err === 'string') return err;
-	if (Array.isArray(err)) {
-		return err
+	let detail: string | undefined;
+	if (typeof err === 'string') detail = err;
+	else if (Array.isArray(err)) {
+		detail = err
 			.map((item: { field?: string; message?: string }) =>
 				item?.field ? `${item.field}: ${item.message}` : String(item?.message ?? item),
 			)
 			.join('; ');
 	}
-	return undefined;
+	if (!detail) return undefined;
+
+	const status = (error as { httpCode?: string }).httpCode;
+	return status ? `A LigueLead recusou a requisição (HTTP ${status}): ${detail}` : detail;
 }
 
 export class LigueLead implements INodeType {
@@ -93,6 +97,7 @@ export class LigueLead implements INodeType {
 					});
 					continue;
 				}
+				if ((error as Error)?.name === 'NodeOperationError') throw error;
 				const apiMessage = extractApiErrorMessage(error);
 				if (error instanceof NodeApiError || (error as Error)?.name === 'NodeApiError') {
 					if (apiMessage) {

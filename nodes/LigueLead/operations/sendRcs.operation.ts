@@ -1,6 +1,7 @@
 import type { OperationDef } from './types';
 import { getBaseUrl } from './utils';
 import { NodeOperationError } from 'n8n-workflow';
+import { validateAgent, validatePhones, validateTemplate } from './rcsValidation';
 
 export const sendRcsOperation: OperationDef = {
 	value: 'sendRcs',
@@ -110,7 +111,7 @@ export const sendRcsOperation: OperationDef = {
 		const agentId = (ctx.getNodeParameter('agentId', itemIndex) as string)?.trim();
 
 		if (!agentId) {
-			throw new NodeOperationError(ctx.getNode(), 'Please provide "Agent ID". Use the "List RCS Agents" operation to find it.');
+			throw new NodeOperationError(ctx.getNode(), 'Informe o "Agent ID". Use a operação "List RCS Agents" para encontrá-lo.', { itemIndex });
 		}
 
 		const phones = Array.isArray(phonesRaw)
@@ -118,8 +119,9 @@ export const sendRcsOperation: OperationDef = {
 			: phonesRaw.split(',').map((p) => p.trim()).filter(Boolean);
 
 		if (!phones.length) {
-			throw new NodeOperationError(ctx.getNode(), 'Please provide at least 1 phone number in "Phones".');
+			throw new NodeOperationError(ctx.getNode(), 'Informe pelo menos 1 telefone em "Phones".', { itemIndex });
 		}
+		validatePhones(ctx, itemIndex, phones);
 
 		type TemplateVariable = { key: string; value: string };
 
@@ -136,24 +138,32 @@ export const sendRcsOperation: OperationDef = {
 		if (sendAs === 'message') {
 			const message = ctx.getNodeParameter('message', itemIndex) as string;
 			if (!message?.trim()) {
-				throw new NodeOperationError(ctx.getNode(), 'Please provide "Message".');
+				throw new NodeOperationError(ctx.getNode(), 'Informe o texto em "Message".', { itemIndex });
 			}
 			if (message.trim().length > 306) {
-				throw new NodeOperationError(ctx.getNode(), '"Message" must be 306 characters or less.');
+				throw new NodeOperationError(
+					ctx.getNode(),
+					`"Message" tem ${message.trim().length} caracteres; o limite do RCS sem template é 306.`,
+					{ itemIndex },
+				);
 			}
 			body.message = message.trim();
+			await validateAgent(ctx, itemIndex, baseUrl, agentId);
 		} else {
 			const templateId = ctx.getNodeParameter('templateId', itemIndex) as string;
 			if (!templateId?.trim()) {
-				throw new NodeOperationError(ctx.getNode(), 'Please provide "Template ID".');
+				throw new NodeOperationError(ctx.getNode(), 'Informe o "Template ID".', { itemIndex });
 			}
 			body.template_id = templateId.trim();
 
 			const rawVars = ctx.getNodeParameter('templateVariables', itemIndex, {}) as {
 				variable?: TemplateVariable[];
 			};
-			if (rawVars.variable?.length) {
-				body.template_variables = rawVars.variable.filter((v) => v.key?.trim());
+			const variables = (rawVars.variable ?? []).filter((v) => v.key?.trim());
+			await validateAgent(ctx, itemIndex, baseUrl, agentId);
+			await validateTemplate(ctx, itemIndex, baseUrl, body.template_id, variables);
+			if (variables.length) {
+				body.template_variables = variables;
 			}
 		}
 
