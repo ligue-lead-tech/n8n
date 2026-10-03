@@ -4,7 +4,8 @@ import { getBaseUrl } from './utils';
 export const listRcsAgentsOperation: OperationDef = {
 	value: 'listRcsAgents',
 	name: 'List RCS Agents',
-	description: 'Returns all RCS agents (sender brands) in the account with their IDs and review status',
+	description:
+		'Returns all RCS agents (sender brands) in the account with their IDs and review status',
 	properties: [
 		{
 			displayName: 'Notice',
@@ -13,7 +14,8 @@ export const listRcsAgentsOperation: OperationDef = {
 			default: '',
 			displayOptions: { show: { operation: ['listRcsAgents'] } },
 			typeOptions: {},
-			description: 'Use the <b>sender_name</b> field to identify your agent, and copy the <b>ID</b> of an agent with <b>can_send_with_this_credential = true</b> (approved and registered under the credential App ID) to use in "Send RCS"',
+			description:
+				'Use the <b>sender_name</b> field to identify your agent, and copy the <b>ID</b> of an agent with <b>can_send_with_this_credential = true</b> (approved and registered under the credential App ID) to use in "Send RCS"',
 		},
 	],
 

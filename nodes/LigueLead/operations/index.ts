@@ -5,10 +5,12 @@ import { sendSmsOperation } from './sendSms.operation';
 import { sendVoiceOperation } from './sendVoice.operation';
 import { sendRcsOperation } from './sendRcs.operation';
 import { listRcsAgentsOperation } from './listRcsAgents.operation';
+import { uploadAudioOperation } from './uploadAudio.operation';
 
 export const operations: OperationDef[] = [
 	sendSmsOperation,
 	sendVoiceOperation,
+	uploadAudioOperation,
 	sendRcsOperation,
 	listRcsAgentsOperation,
 ];

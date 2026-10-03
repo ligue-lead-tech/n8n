@@ -1,6 +1,7 @@
 import { NodeOperationError } from 'n8n-workflow';
 import type { OperationDef } from './types';
 import { getBaseUrl, validateWebhookUrl } from './utils';
+import { uploadAudio } from './voiceUpload';
 
 export const sendVoiceOperation: OperationDef = {
 	value: 'sendVoice',
@@ -17,13 +18,52 @@ export const sendVoiceOperation: OperationDef = {
 			description: 'Title for the voice call dispatch',
 		},
 		{
+			displayName: 'Audio Source',
+			name: 'audioSource',
+			type: 'options',
+			default: 'id',
+			displayOptions: { show: { operation: ['sendVoice'] } },
+			description:
+				'Use an audio already uploaded to LigueLead, or upload the file received by this node',
+			options: [
+				{
+					name: 'Audio ID',
+					value: 'id',
+					description: 'Use the ID of an audio already uploaded (voice_upload_id)',
+				},
+				{
+					name: 'Upload File',
+					value: 'upload',
+					description: 'Upload the MP3/WAV file from a binary field and call with it',
+				},
+			],
+		},
+		{
 			displayName: 'Voice Upload ID',
 			name: 'voiceUploadId',
 			type: 'number',
 			default: 0,
 			required: true,
-			displayOptions: { show: { operation: ['sendVoice'] } },
-			description: 'ID of the previously uploaded audio (voice_upload_id)',
+			displayOptions: { show: { operation: ['sendVoice'], audioSource: ['id'] } },
+			description:
+				'ID of the previously uploaded audio (voice_upload_id). Use the "Upload Audio" operation to get one.',
+		},
+		{
+			displayName: 'Input Binary Field',
+			name: 'binaryPropertyName',
+			type: 'string',
+			required: true,
+			default: 'data',
+			displayOptions: { show: { operation: ['sendVoice'], audioSource: ['upload'] } },
+			description: 'Name of the binary field that holds the audio file (MP3 or WAV, max 50 MB)',
+		},
+		{
+			displayName: 'Audio Title',
+			name: 'audioTitle',
+			type: 'string',
+			default: '',
+			displayOptions: { show: { operation: ['sendVoice'], audioSource: ['upload'] } },
+			description: 'Name used to identify the uploaded audio. Defaults to the file name.',
 		},
 		{
 			displayName: 'Phones',
@@ -93,9 +133,10 @@ export const sendVoiceOperation: OperationDef = {
 					.map((p) => p.trim())
 					.filter(Boolean);
 
-		const voiceUploadId = ctx.getNodeParameter('voiceUploadId', itemIndex) as number;
-		if (!voiceUploadId || Number.isNaN(voiceUploadId)) {
-			throw new NodeOperationError(ctx.getNode(), 'Please provide a valid Voice Upload ID.');
+		if (!phones.length) {
+			throw new NodeOperationError(ctx.getNode(), 'Informe pelo menos 1 telefone em "Phones".', {
+				itemIndex,
+			});
 		}
 
 		const body: {
@@ -106,7 +147,7 @@ export const sendVoiceOperation: OperationDef = {
 			retry_interval_min?: number;
 			retry_end_time?: string;
 			webhook_url?: string;
-		} = { title, voice_upload_id: voiceUploadId, phones };
+		} = { title, voice_upload_id: 0, phones };
 
 		const additional = ctx.getNodeParameter('additionalFields', itemIndex, {}) as {
 			retryAttempts?: number;
@@ -176,6 +217,34 @@ export const sendVoiceOperation: OperationDef = {
 			body.webhook_url = validateWebhookUrl(ctx, itemIndex, additional.webhookUrl);
 		}
 
+		// Resolved last so a file is only uploaded once everything else is valid.
+		// Older workflows have no audioSource saved, so they keep using the ID field
+		const audioSource = ctx.getNodeParameter('audioSource', itemIndex, 'id') as 'id' | 'upload';
+		let voiceUploadId: number;
+		let uploadedAudio: { audio_id: number; title: string } | undefined;
+		if (audioSource === 'upload') {
+			const audio = await uploadAudio(
+				ctx,
+				itemIndex,
+				baseUrl,
+				ctx.getNodeParameter('binaryPropertyName', itemIndex, 'data') as string,
+				ctx.getNodeParameter('audioTitle', itemIndex, '') as string,
+			);
+			voiceUploadId = audio.id;
+			uploadedAudio = { audio_id: audio.id, title: audio.title };
+		} else {
+			voiceUploadId = ctx.getNodeParameter('voiceUploadId', itemIndex) as number;
+			if (!voiceUploadId || Number.isNaN(voiceUploadId)) {
+				throw new NodeOperationError(ctx.getNode(), 'Informe um "Voice Upload ID" válido.', {
+					itemIndex,
+					description:
+						'Use a operação "Upload Audio" para subir o áudio e obter o ID, ou mude "Audio Source" para "Upload File".',
+				});
+			}
+		}
+
+		body.voice_upload_id = voiceUploadId;
+
 		const response = await ctx.helpers.httpRequestWithAuthentication.call(ctx, 'llApi', {
 			method: 'POST',
 			url,
@@ -183,6 +252,10 @@ export const sendVoiceOperation: OperationDef = {
 			body,
 		});
 
-		return { request: { url, body }, response };
+		return {
+			...(uploadedAudio ? { uploaded_audio: uploadedAudio } : {}),
+			request: { url, body },
+			response,
+		};
 	},
 };

@@ -1,6 +1,6 @@
 {
 	"name": "@liguelead/n8n-nodes-liguelead",
-	"version": "0.0.32",
+	"version": "0.0.33",
 	"private": false,
 	"description": "Community node for n8n to send SMS and voice calls using the LigueLead API",
 	"license": "MIT",
@@ -45,6 +45,7 @@
 	},
 	"devDependencies": {
 		"@n8n/node-cli": "*",
+		"@types/node": "^20.19.43",
 		"cpx": "^1.2.1",
 		"eslint": "9.32.0",
 		"prettier": "3.6.2",
