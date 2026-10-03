@@ -1,12 +1,21 @@
 import type { IExecuteFunctions } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 
-type Agent = { id?: string; app_id?: string | null; status?: string; sender_name?: string };
-type Template = { id?: string; title?: string } & Record<string, unknown>;
+type Agent = {
+	id?: string;
+	app_id?: string | null;
+	status?: string;
+	sender_name?: string;
+	rejection_reason?: string | null;
+};
+type Template = { id?: string; title?: string; agent_id?: string } & Record<string, unknown>;
 type TemplateVariable = { key: string; value: string };
 
 // Agents and templates are fetched once per execution, not once per item
-const cache = new WeakMap<object, { agents?: Promise<Agent[] | null>; templates?: Promise<Template[] | null> }>();
+const cache = new WeakMap<
+	object,
+	{ agents?: Promise<Agent[] | null>; templates?: Promise<Template[] | null> }
+>();
 
 function getCache(ctx: IExecuteFunctions) {
 	let entry = cache.get(ctx);
@@ -32,7 +41,12 @@ async function fetchList<T>(ctx: IExecuteFunctions, url: string): Promise<T[] | 
 	}
 }
 
-function fail(ctx: IExecuteFunctions, itemIndex: number, message: string, description?: string): never {
+function fail(
+	ctx: IExecuteFunctions,
+	itemIndex: number,
+	message: string,
+	description?: string,
+): never {
 	throw new NodeOperationError(ctx.getNode(), message, { itemIndex, description });
 }
 
@@ -97,8 +111,10 @@ export async function validateAgent(
 		fail(
 			ctx,
 			itemIndex,
-			`Agente RCS ${agentId}${name} ainda não está aprovado (status: ${agent.status})`,
-			'Só agentes com status "approved" podem enviar RCS. Aguarde a aprovação ou use outro agente.',
+			`Agente RCS ${agentId}${name} não está aprovado (status: ${agent.status})`,
+			agent.rejection_reason
+				? `Motivo da reprovação: ${agent.rejection_reason}`
+				: 'Só agentes com status "approved" podem enviar RCS. Aguarde a aprovação ou use outro agente.',
 		);
 	}
 }
@@ -134,6 +150,31 @@ export async function validateTemplate(
 			'Confira o Template ID no painel da LigueLead (RCS Templates) e se ele foi criado na mesma conta da credencial.',
 		);
 	}
+
+	// The API takes the agent from the template and only refuses it when it is no longer
+	// approved, so that is all we check here (not the app, unlike freeform sends)
+	if (template.agent_id) {
+		const entry = getCache(ctx);
+		entry.agents ??= fetchList<Agent>(ctx, `${baseUrl}/rcs/agents`);
+		const agent = (await entry.agents)?.find((a) => a.id === template.agent_id);
+		if (agent && agent.status !== 'approved') {
+			const name = agent.sender_name ? ` (${agent.sender_name})` : '';
+			fail(
+				ctx,
+				itemIndex,
+				`O agente do template "${template.title ?? templateId}"${name} não está aprovado (status: ${agent.status})`,
+				agent.rejection_reason
+					? `Motivo da reprovação: ${agent.rejection_reason}`
+					: 'Templates só enviam quando o agente vinculado a eles está aprovado. Aguarde a aprovação ou use outro template.',
+			);
+		}
+	}
+
+	// The listing may omit the template content; only check placeholders when it is there
+	const hasContent = ['body', 'header', 'cards', 'fallback_message'].some(
+		(k) => template[k] !== undefined,
+	);
+	if (!hasContent) return;
 
 	const placeholders = new Set(
 		[...JSON.stringify(template).matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map((m) => m[1]),

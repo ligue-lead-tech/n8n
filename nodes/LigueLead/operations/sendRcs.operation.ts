@@ -19,16 +19,6 @@ export const sendRcsOperation: OperationDef = {
 			description: 'List of phone numbers separated by comma (national 11-digit, with +55, or DDI)',
 		},
 		{
-			displayName: 'Agent ID',
-			name: 'agentId',
-			type: 'string',
-			required: true,
-			default: '',
-			placeholder: '7b3c1e90-4d2a-4f11-9c8e-2a5b6d0f3e47',
-			displayOptions: { show: { operation: ['sendRcs'] } },
-			description: 'ID of the approved RCS agent (sender brand shown on the device). It must belong to the same App ID as the credential. Use the "List RCS Agents" operation to find it.',
-		},
-		{
 			displayName: 'Send As',
 			name: 'sendAs',
 			type: 'options',
@@ -40,12 +30,14 @@ export const sendRcsOperation: OperationDef = {
 				{
 					name: 'Text Message (no template)',
 					value: 'message',
-					description: 'Type the message text directly — max 306 chars. If the recipient\'s device does not support RCS, the same text is sent as an SMS fallback.',
+					description:
+						"Type the message text directly — max 306 chars. If the recipient's device does not support RCS, the same text is sent as an SMS fallback.",
 				},
 				{
 					name: 'Template',
 					value: 'template',
-					description: 'Use a template created in advance via POST /rcs/templates. Supports rich formatting and reusable content with dynamic placeholders.',
+					description:
+						'Use a template created in advance via POST /rcs/templates. Supports rich formatting and reusable content with dynamic placeholders.',
 				},
 			],
 		},
@@ -57,7 +49,19 @@ export const sendRcsOperation: OperationDef = {
 			default: '',
 			typeOptions: { rows: 4 },
 			displayOptions: { show: { operation: ['sendRcs'], sendAs: ['message'] } },
-			description: 'Plain text to send (max 306 chars). This same text is also used as the SMS fallback if the recipient\'s device does not support RCS.',
+			description:
+				"Plain text to send (max 306 chars). This same text is also used as the SMS fallback if the recipient's device does not support RCS.",
+		},
+		{
+			displayName: 'Agent ID',
+			name: 'agentId',
+			type: 'string',
+			required: true,
+			default: '',
+			placeholder: '7b3c1e90-4d2a-4f11-9c8e-2a5b6d0f3e47',
+			displayOptions: { show: { operation: ['sendRcs'], sendAs: ['message'] } },
+			description:
+				'ID of the approved RCS agent (sender brand shown on the device). Required only for text messages — template sends use the template\'s own agent. It must belong to the same App ID as the credential. Use the "List RCS Agents" operation to find it.',
 		},
 		{
 			displayName: 'Template ID',
@@ -67,7 +71,8 @@ export const sendRcsOperation: OperationDef = {
 			default: '',
 			placeholder: '449dff4b-08c0-40a6-aa18-86dc6f9745bd',
 			displayOptions: { show: { operation: ['sendRcs'], sendAs: ['template'] } },
-			description: 'ID of the RCS template. Find it in your LigueLead account under RCS Templates.',
+			description:
+				'ID of the RCS template. Find it in your LigueLead account under RCS Templates. The message goes out as the agent linked to the template.',
 		},
 		{
 			displayName: 'Template Variables',
@@ -108,18 +113,18 @@ export const sendRcsOperation: OperationDef = {
 
 		const phonesRaw = ctx.getNodeParameter('phones', itemIndex) as string | string[];
 		const sendAs = ctx.getNodeParameter('sendAs', itemIndex) as 'message' | 'template';
-		const agentId = (ctx.getNodeParameter('agentId', itemIndex) as string)?.trim();
-
-		if (!agentId) {
-			throw new NodeOperationError(ctx.getNode(), 'Informe o "Agent ID". Use a operação "List RCS Agents" para encontrá-lo.', { itemIndex });
-		}
 
 		const phones = Array.isArray(phonesRaw)
 			? phonesRaw.map((p) => p.trim()).filter(Boolean)
-			: phonesRaw.split(',').map((p) => p.trim()).filter(Boolean);
+			: phonesRaw
+					.split(',')
+					.map((p) => p.trim())
+					.filter(Boolean);
 
 		if (!phones.length) {
-			throw new NodeOperationError(ctx.getNode(), 'Informe pelo menos 1 telefone em "Phones".', { itemIndex });
+			throw new NodeOperationError(ctx.getNode(), 'Informe pelo menos 1 telefone em "Phones".', {
+				itemIndex,
+			});
 		}
 		validatePhones(ctx, itemIndex, phones);
 
@@ -127,13 +132,13 @@ export const sendRcsOperation: OperationDef = {
 
 		type BodyType = {
 			phones: string[];
-			agent_id: string;
+			agent_id?: string;
 			message?: string;
 			template_id?: string;
 			template_variables?: TemplateVariable[];
 		};
 
-		const body: BodyType = { phones, agent_id: agentId };
+		const body: BodyType = { phones };
 
 		if (sendAs === 'message') {
 			const message = ctx.getNodeParameter('message', itemIndex) as string;
@@ -148,7 +153,18 @@ export const sendRcsOperation: OperationDef = {
 				);
 			}
 			body.message = message.trim();
+
+			// Freeform sends must name the agent; template sends must not (the API rejects it)
+			const agentId = (ctx.getNodeParameter('agentId', itemIndex, '') as string)?.trim();
+			if (!agentId) {
+				throw new NodeOperationError(
+					ctx.getNode(),
+					'Informe o "Agent ID". Ele é obrigatório no envio de texto sem template.',
+					{ itemIndex, description: 'Use a operação "List RCS Agents" para encontrá-lo.' },
+				);
+			}
 			await validateAgent(ctx, itemIndex, baseUrl, agentId);
+			body.agent_id = agentId;
 		} else {
 			const templateId = ctx.getNodeParameter('templateId', itemIndex) as string;
 			if (!templateId?.trim()) {
@@ -160,7 +176,6 @@ export const sendRcsOperation: OperationDef = {
 				variable?: TemplateVariable[];
 			};
 			const variables = (rawVars.variable ?? []).filter((v) => v.key?.trim());
-			await validateAgent(ctx, itemIndex, baseUrl, agentId);
 			await validateTemplate(ctx, itemIndex, baseUrl, body.template_id, variables);
 			if (variables.length) {
 				body.template_variables = variables;
