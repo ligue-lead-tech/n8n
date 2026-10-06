@@ -1,7 +1,7 @@
 import type { OperationDef } from './types';
 import { llRequest } from './request';
 import { getBaseUrl } from './utils';
-import { NodeOperationError } from 'n8n-workflow';
+import { NodeOperationError, sleep } from 'n8n-workflow';
 import { validateAgent, validatePhones, validateTemplate } from './rcsValidation';
 
 export const sendRcsOperation: OperationDef = {
@@ -106,6 +106,33 @@ export const sendRcsOperation: OperationDef = {
 				},
 			],
 		},
+		{
+			displayName: 'Options',
+			name: 'rcsOptions',
+			type: 'collection',
+			placeholder: 'Add Option',
+			default: {},
+			displayOptions: { show: { operation: ['sendRcs'] } },
+			options: [
+				{
+					displayName: 'Delay Between Items (Ms)',
+					name: 'delayMs',
+					type: 'number',
+					default: 0,
+					typeOptions: { minValue: 0, maxValue: 60000 },
+					description:
+						'Wait this long before each send after the first one. Use it when sending many items to avoid LigueLead throttling (e.g. 1000 = 1 send per second).',
+				},
+				{
+					displayName: 'Retry When LigueLead Is Busy',
+					name: 'retryWhenBusy',
+					type: 'boolean',
+					default: false,
+					description:
+						'Whether to retry up to 3 times (2s, 4s, 8s) when LigueLead answers 429 "Failed to call ligueapi-backend". That error happens while validating the agent, before the message is queued, so retrying does not duplicate sends.',
+				},
+			],
+		},
 	],
 
 	async execute(ctx, itemIndex) {
@@ -183,7 +210,19 @@ export const sendRcsOperation: OperationDef = {
 			}
 		}
 
-		const response = await llRequest(ctx, itemIndex, { method: 'POST', url, body });
+		const options = ctx.getNodeParameter('rcsOptions', itemIndex, {}) as {
+			delayMs?: number;
+			retryWhenBusy?: boolean;
+		};
+		const delayMs = Math.min(Math.max(Number(options.delayMs) || 0, 0), 60000);
+		if (delayMs && itemIndex > 0) await sleep(delayMs);
+
+		const response = await llRequest(ctx, itemIndex, {
+			method: 'POST',
+			url,
+			body,
+			retryWhenBusy: options.retryWhenBusy === true,
+		});
 
 		return { request: { url, body }, response };
 	},

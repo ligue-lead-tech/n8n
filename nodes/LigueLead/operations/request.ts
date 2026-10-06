@@ -78,7 +78,32 @@ export function describeBody(body: unknown): string | undefined {
 	return JSON.stringify(body).slice(0, 1000);
 }
 
-function explainStatus(status: number, itemsInRun: number): string {
+// Seen in LigueLead's logs: POST /rcs looks the agent up on an internal service
+// (internal/rcs/agents/{client}/{agent}) and that service answers 429. The public API
+// then returns this generic text. It fails before the send is queued.
+export function isInternalAgentThrottle(path: string, status: number, reason: string): boolean {
+	return status === 429 && /\/rcs$/.test(path) && /failed to call ligueapi-backend/i.test(reason);
+}
+
+function explainStatus(
+	status: number,
+	itemsInRun: number,
+	path: string,
+	reason: string,
+	retriedWhenBusy: boolean,
+): string {
+	if (isInternalAgentThrottle(path, status, reason))
+		return (
+			'A LigueLead valida o agente RCS num serviço interno a cada envio, e esse serviço atingiu o limite dele (429 interno). ' +
+			'Não é limite da sua conta e o envio deste item NÃO foi feito. ' +
+			(retriedWhenBusy
+				? 'O node já tentou de novo e o serviço continuou ocupado. Aumente o "Delay Between Items" nas Options do Send RCS. '
+				: 'Para evitar: nas Options do Send RCS, ligue "Retry When LigueLead Is Busy" e/ou defina um "Delay Between Items" (ex.: 1000 ms). ') +
+			(itemsInRun > 1
+				? `Este node recebeu ${itemsInRun} itens (1 envio e 1 validação de agente por item); se a mensagem for a mesma, junte os telefones no campo "Phones" de um único item. `
+				: '') +
+			'Se acontecer com poucos envios, informe o suporte da LigueLead com os dados abaixo.'
+		);
 	if (status === 400) return 'A requisição veio malformada. Confira os campos preenchidos no node.';
 	if (status === 401)
 		return 'Credencial recusada: o API Token ou o App ID da credencial estão errados, expirados ou bloqueados. Gere/confira em Integrações → API Token no painel da LigueLead.';
@@ -114,6 +139,8 @@ export type LlRequest = {
 	headers?: IDataObject;
 	// GETs used for validation can be retried safely; sends never are, to avoid duplicates
 	retryOnThrottle?: boolean;
+	// Sends only: retry the internal agent-validation 429, which fails before anything is queued
+	retryWhenBusy?: boolean;
 };
 
 export async function llRequest<T = unknown>(
@@ -125,7 +152,7 @@ export async function llRequest<T = unknown>(
 	const appId = String(credentials.appId ?? '');
 	const path = req.url.replace(/^https?:\/\/[^/]+/, '');
 	const itemsInRun = ctx.getInputData().length;
-	const attempts = req.retryOnThrottle ? 3 : 1;
+	const attempts = req.retryOnThrottle ? 3 : req.retryWhenBusy ? 4 : 1;
 
 	let response: FullResponse | undefined;
 	for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -178,18 +205,19 @@ export async function llRequest<T = unknown>(
 			if (req.method !== 'GET') stats.accepted++;
 			return parseBody(response.body) as T;
 		}
-		if (retryable && attempt < attempts) {
+		const body = parseBody(response.body);
+		const reason = describeBody(body) ?? response.statusMessage ?? 'sem corpo na resposta';
+		const canRetry = req.retryWhenBusy ? isInternalAgentThrottle(path, status, reason) : retryable;
+		if (canRetry && attempt < attempts) {
 			const retryAfter = Number(header(response.headers, 'retry-after'));
 			const waitMs =
 				Number.isFinite(retryAfter) && retryAfter > 0
-					? Math.min(retryAfter, 10) * 1000
-					: attempt * 1500;
+					? Math.min(retryAfter, 30) * 1000
+					: (req.retryWhenBusy ? 2000 : 1500) * 2 ** (attempt - 1);
 			await sleep(waitMs);
 			continue;
 		}
 
-		const body = parseBody(response.body);
-		const reason = describeBody(body) ?? response.statusMessage ?? 'sem corpo na resposta';
 		const elapsed = ((Date.now() - stats.firstAt) / 1000).toFixed(1);
 		const limitHeaders = [
 			'retry-after',
@@ -219,7 +247,7 @@ export async function llRequest<T = unknown>(
 				description: [
 					`Chamada: ${req.method} ${path}`,
 					`Motivo informado pela API: ${reason}`,
-					`O que significa: ${explainStatus(status, itemsInRun)}`,
+					`O que significa: ${explainStatus(status, itemsInRun, path, reason, req.retryWhenBusy === true && attempt > 1)}`,
 					limitHeaders.length ? `Limites informados pela API: ${limitHeaders.join(' | ')}` : '',
 					`Volume deste node nesta execução: ${stats.count} requisição(ões) em ${elapsed}s; item ${itemIndex + 1} de ${itemsInRun}` +
 						(attempts > 1 ? `; ${attempt} tentativa(s) nesta chamada` : ''),
