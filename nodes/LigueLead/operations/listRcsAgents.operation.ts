@@ -1,4 +1,5 @@
 import type { OperationDef } from './types';
+import { llRequest } from './request';
 import { getBaseUrl } from './utils';
 
 export const listRcsAgentsOperation: OperationDef = {
@@ -19,18 +20,16 @@ export const listRcsAgentsOperation: OperationDef = {
 		},
 	],
 
-	async execute(ctx) {
+	async execute(ctx, itemIndex) {
 		const baseUrl = await getBaseUrl(ctx);
 		const url = `${baseUrl}/rcs/agents`;
 
 		const credentials = await ctx.getCredentials('llApi');
 		const appId = String(credentials.appId ?? '');
 
-		const response = await ctx.helpers.httpRequestWithAuthentication.call(ctx, 'llApi', {
-			method: 'GET',
-			url,
-			json: true,
-		});
+		const response = await llRequest<
+			Array<Record<string, unknown>> | { data?: Array<Record<string, unknown>> }
+		>(ctx, itemIndex, { method: 'GET', url, retryOnThrottle: true });
 
 		const list = (Array.isArray(response) ? response : (response?.data ?? [])) as Array<
 			Record<string, unknown>

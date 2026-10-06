@@ -1,5 +1,6 @@
 import { NodeOperationError } from 'n8n-workflow';
 import type { OperationDef } from './types';
+import { llRequest } from './request';
 import { getBaseUrl, validateWebhookUrl } from './utils';
 import { uploadAudio } from './voiceUpload';
 
@@ -245,12 +246,7 @@ export const sendVoiceOperation: OperationDef = {
 
 		body.voice_upload_id = voiceUploadId;
 
-		const response = await ctx.helpers.httpRequestWithAuthentication.call(ctx, 'llApi', {
-			method: 'POST',
-			url,
-			json: true,
-			body,
-		});
+		const response = await llRequest(ctx, itemIndex, { method: 'POST', url, body });
 
 		return {
 			...(uploadedAudio ? { uploaded_audio: uploadedAudio } : {}),

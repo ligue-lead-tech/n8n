@@ -1,4 +1,5 @@
 import type { OperationDef } from './types';
+import { llRequest } from './request';
 import { getBaseUrl, validateWebhookUrl } from './utils';
 import { NodeOperationError } from 'n8n-workflow';
 
@@ -112,12 +113,7 @@ export const sendSmsOperation: OperationDef = {
 			body.webhook_url = validateWebhookUrl(ctx, itemIndex, additional.webhookUrl);
 		}
 
-		const response = await ctx.helpers.httpRequestWithAuthentication.call(ctx, 'llApi', {
-			method: 'POST',
-			url,
-			json: true,
-			body,
-		});
+		const response = await llRequest(ctx, itemIndex, { method: 'POST', url, body });
 
 		return { request: { url, body }, response };
 	},

@@ -1,5 +1,6 @@
 import type { IExecuteFunctions } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
+import { llRequest } from './request';
 
 type Agent = {
 	id?: string;
@@ -27,13 +28,17 @@ function getCache(ctx: IExecuteFunctions) {
 }
 
 // Returns null when the lookup itself fails, so the API gets the final say
-async function fetchList<T>(ctx: IExecuteFunctions, url: string): Promise<T[] | null> {
+async function fetchList<T>(
+	ctx: IExecuteFunctions,
+	itemIndex: number,
+	url: string,
+): Promise<T[] | null> {
 	try {
-		const response = (await ctx.helpers.httpRequestWithAuthentication.call(ctx, 'llApi', {
+		const response = await llRequest<T[] | { data?: T[] }>(ctx, itemIndex, {
 			method: 'GET',
 			url,
-			json: true,
-		})) as T[] | { data?: T[] };
+			retryOnThrottle: true,
+		});
 		const list = Array.isArray(response) ? response : response?.data;
 		return Array.isArray(list) ? list : null;
 	} catch {
@@ -81,7 +86,7 @@ export async function validateAgent(
 	}
 
 	const entry = getCache(ctx);
-	entry.agents ??= fetchList<Agent>(ctx, `${baseUrl}/rcs/agents`);
+	entry.agents ??= fetchList<Agent>(ctx, itemIndex, `${baseUrl}/rcs/agents`);
 	const agents = await entry.agents;
 	if (!agents) return;
 
@@ -137,7 +142,7 @@ export async function validateTemplate(
 	}
 
 	const entry = getCache(ctx);
-	entry.templates ??= fetchList<Template>(ctx, `${baseUrl}/rcs/templates`);
+	entry.templates ??= fetchList<Template>(ctx, itemIndex, `${baseUrl}/rcs/templates`);
 	const templates = await entry.templates;
 	if (!templates) return;
 
@@ -155,7 +160,7 @@ export async function validateTemplate(
 	// approved, so that is all we check here (not the app, unlike freeform sends)
 	if (template.agent_id) {
 		const entry = getCache(ctx);
-		entry.agents ??= fetchList<Agent>(ctx, `${baseUrl}/rcs/agents`);
+		entry.agents ??= fetchList<Agent>(ctx, itemIndex, `${baseUrl}/rcs/agents`);
 		const agent = (await entry.agents)?.find((a) => a.id === template.agent_id);
 		if (agent && agent.status !== 'approved') {
 			const name = agent.sender_name ? ` (${agent.sender_name})` : '';

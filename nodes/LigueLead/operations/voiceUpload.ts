@@ -1,5 +1,6 @@
 import type { IExecuteFunctions } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
+import { llRequest } from './request';
 
 const MAX_SIZE_BYTES = 50 * 1024 * 1024;
 const AUDIO_TYPES: Record<string, string> = {
@@ -96,13 +97,16 @@ export async function uploadAudio(
 		Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8'),
 	]);
 
-	const response = (await ctx.helpers.httpRequestWithAuthentication.call(ctx, 'llApi', {
-		method: 'POST',
-		url: `${baseUrl}/voice/uploads`,
-		headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
-		body,
-		json: true,
-	})) as { data?: { id?: number | string; title?: string } };
+	const response = await llRequest<{ data?: { id?: number | string; title?: string } }>(
+		ctx,
+		itemIndex,
+		{
+			method: 'POST',
+			url: `${baseUrl}/voice/uploads`,
+			headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+			body,
+		},
+	);
 
 	const id = Number(response?.data?.id);
 	if (!Number.isFinite(id) || id <= 0) {

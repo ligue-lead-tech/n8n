@@ -129,6 +129,34 @@ function extractApiErrorMessage(error: unknown): string | undefined {
 	return status ? `A LigueLead recusou a requisição (HTTP ${status}): ${detail}` : detail;
 }
 
+const withVersion = (text: string) =>
+	text.includes('(LigueLead node v') ? text : `${text}\n\n(LigueLead node v${NODE_VERSION})`;
+
+function toNodeError(
+	ctx: IExecuteFunctions,
+	error: unknown,
+	itemIndex: number,
+): NodeOperationError {
+	if ((error as Error)?.name === 'NodeOperationError') {
+		const opError = error as NodeOperationError;
+		opError.description = withVersion(opError.description ?? opError.message);
+		return opError;
+	}
+	const apiMessage = extractApiErrorMessage(error);
+	if (apiMessage) {
+		return new NodeOperationError(ctx.getNode(), apiMessage, {
+			itemIndex,
+			description: withVersion(apiMessage),
+		});
+	}
+	// Never fall back to n8n's generic "request is invalid" text: show whatever we have
+	const fallback = describeUnknownError(error);
+	return new NodeOperationError(ctx.getNode(), fallback.message, {
+		itemIndex,
+		description: withVersion(fallback.description),
+	});
+}
+
 export class LigueLead implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'LigueLead',
@@ -177,31 +205,15 @@ export class LigueLead implements INodeType {
 					pairedItem: { item: i },
 				});
 			} catch (error) {
+				const nodeError = toNodeError(this, error, i);
 				if (this.continueOnFail()) {
 					returnData.push({
-						json: { error: extractApiErrorMessage(error) ?? (error as Error).message },
+						json: { error: nodeError.message, details: nodeError.description ?? '' },
 						pairedItem: { item: i },
 					});
 					continue;
 				}
-				if ((error as Error)?.name === 'NodeOperationError') {
-					const opError = error as NodeOperationError;
-					opError.description = `${opError.description ?? opError.message}\n\n(LigueLead node v${NODE_VERSION})`;
-					throw opError;
-				}
-				const apiMessage = extractApiErrorMessage(error);
-				if (apiMessage) {
-					throw new NodeOperationError(this.getNode(), apiMessage, {
-						itemIndex: i,
-						description: `${apiMessage}\n\n(LigueLead node v${NODE_VERSION})`,
-					});
-				}
-				// Never fall back to n8n's generic "request is invalid" text: show whatever we have
-				const fallback = describeUnknownError(error);
-				throw new NodeOperationError(this.getNode(), fallback.message, {
-					itemIndex: i,
-					description: `${fallback.description}\n\n(LigueLead node v${NODE_VERSION})`,
-				});
+				throw nodeError;
 			}
 		}
 
