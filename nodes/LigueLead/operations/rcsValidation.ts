@@ -65,24 +65,33 @@ export function validateVariableKeys(
 	}
 }
 
-// ── Diagnosis: only after the API refuses a send, at most 2 lookups ──────
+// ── Diagnosis: only after the API refuses a send, at most 2 lookups per run ──
 
-async function fetchList<T>(
-	ctx: IExecuteFunctions,
-	itemIndex: number,
-	url: string,
-): Promise<T[] | null> {
-	try {
-		const response = await llRequest<T[] | { data?: T[] }>(ctx, itemIndex, {
+// Lookups are shared by every failed item of the same execution, so a batch failing
+// for the same reason costs one GET instead of one per item
+const lookups = new WeakMap<object, Map<string, Promise<unknown[] | null>>>();
+
+function fetchList<T>(ctx: IExecuteFunctions, itemIndex: number, url: string): Promise<T[] | null> {
+	let perRun = lookups.get(ctx);
+	if (!perRun) {
+		perRun = new Map();
+		lookups.set(ctx, perRun);
+	}
+	let pending = perRun.get(url);
+	if (!pending) {
+		pending = llRequest<unknown[] | { data?: unknown[] }>(ctx, itemIndex, {
 			method: 'GET',
 			url,
 			retryOnThrottle: true,
-		});
-		const list = Array.isArray(response) ? response : response?.data;
-		return Array.isArray(list) ? list : null;
-	} catch {
-		return null;
+		})
+			.then((response) => {
+				const list = Array.isArray(response) ? response : response?.data;
+				return Array.isArray(list) ? list : null;
+			})
+			.catch(() => null);
+		perRun.set(url, pending);
 	}
+	return pending as Promise<T[] | null>;
 }
 
 type Diagnosis = { message: string; description: string };
