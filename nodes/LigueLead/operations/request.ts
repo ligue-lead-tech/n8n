@@ -17,6 +17,12 @@ type FullResponse = {
 	statusMessage?: string;
 };
 
+// Status and reason of errors raised by llRequest, so callers can diagnose them further
+const apiFailures = new WeakMap<object, { status: number; reason: string }>();
+export function apiFailureOf(error: unknown): { status: number; reason: string } | undefined {
+	return error && typeof error === 'object' ? apiFailures.get(error) : undefined;
+}
+
 // Counts this node's API calls per execution, so rate-limit errors can show the real volume
 const usage = new WeakMap<object, { count: number; firstAt: number; accepted: number }>();
 
@@ -239,7 +245,7 @@ export async function llRequest<T = unknown>(
 			.filter(([, value]) => value)
 			.map(([name, value]) => `${name}: ${value}`);
 
-		throw new NodeOperationError(
+		const failure = new NodeOperationError(
 			ctx.getNode(),
 			`A LigueLead recusou a requisição (HTTP ${status}): ${reason}`,
 			{
@@ -262,6 +268,8 @@ export async function llRequest<T = unknown>(
 					.join('\n'),
 			},
 		);
+		apiFailures.set(failure, { status, reason });
+		throw failure;
 	}
 	throw new NodeOperationError(ctx.getNode(), 'Falha inesperada ao chamar a LigueLead', {
 		itemIndex,

@@ -1,6 +1,6 @@
 import type { IExecuteFunctions } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
-import { llRequest } from './request';
+import { apiFailureOf, llRequest } from './request';
 
 type Agent = {
 	id?: string;
@@ -12,22 +12,61 @@ type Agent = {
 type Template = { id?: string; title?: string; agent_id?: string } & Record<string, unknown>;
 type TemplateVariable = { key: string; value: string };
 
-// Agents and templates are fetched once per execution, not once per item
-const cache = new WeakMap<
-	object,
-	{ agents?: Promise<Agent[] | null>; templates?: Promise<Template[] | null> }
->();
-
-function getCache(ctx: IExecuteFunctions) {
-	let entry = cache.get(ctx);
-	if (!entry) {
-		entry = {};
-		cache.set(ctx, entry);
-	}
-	return entry;
+function fail(
+	ctx: IExecuteFunctions,
+	itemIndex: number,
+	message: string,
+	description?: string,
+): never {
+	throw new NodeOperationError(ctx.getNode(), message, { itemIndex, description });
 }
 
-// Returns null when the lookup itself fails, so the API gets the final say
+// ── Local checks: run before the send and never call the API ─────────────
+
+export function validatePhones(ctx: IExecuteFunctions, itemIndex: number, phones: string[]) {
+	const invalid = phones.filter((phone) => {
+		const digits = phone.replace(/\D/g, '');
+		return !(digits.length === 11 || (digits.length === 13 && digits.startsWith('55')));
+	});
+	if (invalid.length) {
+		fail(
+			ctx,
+			itemIndex,
+			`Telefone(s) inválido(s): ${invalid.join(', ')}`,
+			'Use o formato nacional com DDD (11999999999), com +55 (+5511999999999) ou com DDI sem + (5511999999999).',
+		);
+	}
+}
+
+export function validateAgentIdFormat(ctx: IExecuteFunctions, itemIndex: number, agentId: string) {
+	if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(agentId)) {
+		fail(
+			ctx,
+			itemIndex,
+			`Agent ID "${agentId}" não é um ID válido`,
+			'O Agent ID é um UUID (ex.: 7b3c1e90-4d2a-4f11-9c8e-2a5b6d0f3e47). Use a operação "List RCS Agents" para copiá-lo.',
+		);
+	}
+}
+
+export function validateVariableKeys(
+	ctx: IExecuteFunctions,
+	itemIndex: number,
+	variables: TemplateVariable[],
+) {
+	const badKeys = variables.filter((v) => !/^\d+$/.test(v.key.trim())).map((v) => v.key);
+	if (badKeys.length) {
+		fail(
+			ctx,
+			itemIndex,
+			`Chave(s) de variável inválida(s): ${badKeys.join(', ')}`,
+			'As chaves das Template Variables são números que correspondem aos placeholders do template: "1" para {{1}}, "2" para {{2}}, etc.',
+		);
+	}
+}
+
+// ── Diagnosis: only after the API refuses a send, at most 2 lookups ──────
+
 async function fetchList<T>(
 	ctx: IExecuteFunctions,
 	itemIndex: number,
@@ -46,132 +85,74 @@ async function fetchList<T>(
 	}
 }
 
-function fail(
-	ctx: IExecuteFunctions,
-	itemIndex: number,
-	message: string,
-	description?: string,
-): never {
-	throw new NodeOperationError(ctx.getNode(), message, { itemIndex, description });
-}
+type Diagnosis = { message: string; description: string };
 
-export function validatePhones(ctx: IExecuteFunctions, itemIndex: number, phones: string[]) {
-	const invalid = phones.filter((phone) => {
-		const digits = phone.replace(/\D/g, '');
-		return !(digits.length === 11 || (digits.length === 13 && digits.startsWith('55')));
-	});
-	if (invalid.length) {
-		fail(
-			ctx,
-			itemIndex,
-			`Telefone(s) inválido(s): ${invalid.join(', ')}`,
-			'Use o formato nacional com DDD (11999999999), com +55 (+5511999999999) ou com DDI sem + (5511999999999).',
-		);
-	}
-}
-
-export async function validateAgent(
+async function diagnoseAgent(
 	ctx: IExecuteFunctions,
-	itemIndex: number,
-	baseUrl: string,
 	agentId: string,
-) {
-	if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(agentId)) {
-		fail(
-			ctx,
-			itemIndex,
-			`Agent ID "${agentId}" não é um ID válido`,
-			'O Agent ID é um UUID (ex.: 7b3c1e90-4d2a-4f11-9c8e-2a5b6d0f3e47). Use a operação "List RCS Agents" para copiá-lo.',
-		);
-	}
-
-	const entry = getCache(ctx);
-	entry.agents ??= fetchList<Agent>(ctx, itemIndex, `${baseUrl}/rcs/agents`);
-	const agents = await entry.agents;
-	if (!agents) return;
-
+	agents: Agent[],
+): Promise<Diagnosis | undefined> {
 	const credentials = await ctx.getCredentials('llApi');
 	const appId = String(credentials.appId ?? '');
 	const agent = agents.find((a) => a.id === agentId);
 	const name = agent?.sender_name ? ` (${agent.sender_name})` : '';
 
 	if (!agent) {
-		fail(
-			ctx,
-			itemIndex,
-			`Agente RCS ${agentId} não existe nesta conta`,
-			'Confira o Agent ID ou use a operação "List RCS Agents" com esta mesma credencial para ver os agentes disponíveis.',
-		);
+		return {
+			message: `Agente RCS ${agentId} não existe nesta conta`,
+			description:
+				'Confira o Agent ID ou use a operação "List RCS Agents" com esta mesma credencial para ver os agentes disponíveis.',
+		};
 	}
 	if (agent.app_id !== appId) {
-		fail(
-			ctx,
-			itemIndex,
-			`Agente RCS ${agentId}${name} não pertence ao App ID desta credencial`,
-			`O agente está cadastrado no App ID ${agent.app_id ?? '(nenhum)'}, mas a credencial usa o App ID ${appId}. ` +
+		return {
+			message: `Agente RCS ${agentId}${name} não pertence ao App ID desta credencial`,
+			description:
+				`O agente está cadastrado no App ID ${agent.app_id ?? '(nenhum)'}, mas a credencial usa o App ID ${appId}. ` +
 				'Use a credencial do app onde o agente foi cadastrado, ou escolha um agente com "can_send_with_this_credential = true" em "List RCS Agents".',
-		);
+		};
 	}
 	if (agent.status !== 'approved') {
-		fail(
-			ctx,
-			itemIndex,
-			`Agente RCS ${agentId}${name} não está aprovado (status: ${agent.status})`,
-			agent.rejection_reason
+		return {
+			message: `Agente RCS ${agentId}${name} não está aprovado (status: ${agent.status})`,
+			description: agent.rejection_reason
 				? `Motivo da reprovação: ${agent.rejection_reason}`
 				: 'Só agentes com status "approved" podem enviar RCS. Aguarde a aprovação ou use outro agente.',
-		);
+		};
 	}
+	return undefined;
 }
 
-export async function validateTemplate(
+async function diagnoseTemplate(
 	ctx: IExecuteFunctions,
 	itemIndex: number,
 	baseUrl: string,
 	templateId: string,
 	variables: TemplateVariable[],
-) {
-	const badKeys = variables.filter((v) => !/^\d+$/.test(v.key.trim())).map((v) => v.key);
-	if (badKeys.length) {
-		fail(
-			ctx,
-			itemIndex,
-			`Chave(s) de variável inválida(s): ${badKeys.join(', ')}`,
-			'As chaves das Template Variables são números que correspondem aos placeholders do template: "1" para {{1}}, "2" para {{2}}, etc.',
-		);
-	}
-
-	const entry = getCache(ctx);
-	entry.templates ??= fetchList<Template>(ctx, itemIndex, `${baseUrl}/rcs/templates`);
-	const templates = await entry.templates;
-	if (!templates) return;
+): Promise<Diagnosis | undefined> {
+	const templates = await fetchList<Template>(ctx, itemIndex, `${baseUrl}/rcs/templates`);
+	if (!templates) return undefined;
 
 	const template = templates.find((t) => t.id === templateId);
 	if (!template) {
-		fail(
-			ctx,
-			itemIndex,
-			`Template RCS ${templateId} não existe nesta conta`,
-			'Confira o Template ID no painel da LigueLead (RCS Templates) e se ele foi criado na mesma conta da credencial.',
-		);
+		return {
+			message: `Template RCS ${templateId} não existe nesta conta`,
+			description:
+				'Confira o Template ID no painel da LigueLead (RCS Templates) e se ele foi criado na mesma conta da credencial.',
+		};
 	}
 
-	// The API takes the agent from the template and only refuses it when it is no longer
-	// approved, so that is all we check here (not the app, unlike freeform sends)
 	if (template.agent_id) {
-		const entry = getCache(ctx);
-		entry.agents ??= fetchList<Agent>(ctx, itemIndex, `${baseUrl}/rcs/agents`);
-		const agent = (await entry.agents)?.find((a) => a.id === template.agent_id);
+		const agents = await fetchList<Agent>(ctx, itemIndex, `${baseUrl}/rcs/agents`);
+		const agent = agents?.find((a) => a.id === template.agent_id);
 		if (agent && agent.status !== 'approved') {
 			const name = agent.sender_name ? ` (${agent.sender_name})` : '';
-			fail(
-				ctx,
-				itemIndex,
-				`O agente do template "${template.title ?? templateId}"${name} não está aprovado (status: ${agent.status})`,
-				agent.rejection_reason
+			return {
+				message: `O agente do template "${template.title ?? templateId}"${name} não está aprovado (status: ${agent.status})`,
+				description: agent.rejection_reason
 					? `Motivo da reprovação: ${agent.rejection_reason}`
 					: 'Templates só enviam quando o agente vinculado a eles está aprovado. Aguarde a aprovação ou use outro template.',
-			);
+			};
 		}
 	}
 
@@ -179,8 +160,7 @@ export async function validateTemplate(
 	const hasContent = ['body', 'header', 'cards', 'fallback_message'].some(
 		(k) => template[k] !== undefined,
 	);
-	if (!hasContent) return;
-
+	if (!hasContent) return undefined;
 	const placeholders = new Set(
 		[...JSON.stringify(template).matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map((m) => m[1]),
 	);
@@ -189,11 +169,43 @@ export async function validateTemplate(
 		const available = placeholders.size
 			? [...placeholders].map((k) => `{{${k}}}`).join(', ')
 			: 'nenhum';
-		fail(
-			ctx,
-			itemIndex,
-			`Variável(is) ${unknownKeys.map((k) => `{{${k}}}`).join(', ')} não existe(m) no template "${template.title ?? templateId}"`,
-			`Placeholders disponíveis neste template: ${available}.`,
-		);
+		return {
+			message: `Variável(is) ${unknownKeys.map((k) => `{{${k}}}`).join(', ')} não existe(m) no template "${template.title ?? templateId}"`,
+			description: `Placeholders disponíveis neste template: ${available}.`,
+		};
 	}
+	return undefined;
+}
+
+// Rethrows a refused RCS send, enriched with the concrete cause when a lookup can find it.
+// Throttling, auth and server errors are passed through untouched (no extra calls).
+export async function explainRcsFailure(
+	ctx: IExecuteFunctions,
+	itemIndex: number,
+	baseUrl: string,
+	error: unknown,
+	send: { agentId?: string; templateId?: string; variables: TemplateVariable[] },
+): Promise<never> {
+	const failure = apiFailureOf(error);
+	const diagnosable =
+		failure &&
+		[400, 403, 404, 422].includes(failure.status) &&
+		/agent|template|variable|placeholder/i.test(failure.reason);
+	if (!diagnosable) throw error;
+
+	let diagnosis: Diagnosis | undefined;
+	if (send.agentId && /agent/i.test(failure.reason)) {
+		const agents = await fetchList<Agent>(ctx, itemIndex, `${baseUrl}/rcs/agents`);
+		if (agents) diagnosis = await diagnoseAgent(ctx, send.agentId, agents);
+	}
+	if (!diagnosis && send.templateId) {
+		diagnosis = await diagnoseTemplate(ctx, itemIndex, baseUrl, send.templateId, send.variables);
+	}
+	if (!diagnosis) throw error;
+
+	const original = error as NodeOperationError;
+	throw new NodeOperationError(ctx.getNode(), diagnosis.message, {
+		itemIndex,
+		description: `${diagnosis.description}\n\nResposta da API: ${original.message}\n${original.description ?? ''}`,
+	});
 }

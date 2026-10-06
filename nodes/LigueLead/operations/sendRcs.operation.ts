@@ -2,7 +2,12 @@ import type { OperationDef } from './types';
 import { llRequest } from './request';
 import { getBaseUrl } from './utils';
 import { NodeOperationError, sleep } from 'n8n-workflow';
-import { validateAgent, validatePhones, validateTemplate } from './rcsValidation';
+import {
+	explainRcsFailure,
+	validateAgentIdFormat,
+	validatePhones,
+	validateVariableKeys,
+} from './rcsValidation';
 
 export const sendRcsOperation: OperationDef = {
 	value: 'sendRcs',
@@ -191,7 +196,7 @@ export const sendRcsOperation: OperationDef = {
 					{ itemIndex, description: 'Use a operação "List RCS Agents" para encontrá-lo.' },
 				);
 			}
-			await validateAgent(ctx, itemIndex, baseUrl, agentId);
+			validateAgentIdFormat(ctx, itemIndex, agentId);
 			body.agent_id = agentId;
 		} else {
 			const templateId = ctx.getNodeParameter('templateId', itemIndex) as string;
@@ -204,7 +209,7 @@ export const sendRcsOperation: OperationDef = {
 				variable?: TemplateVariable[];
 			};
 			const variables = (rawVars.variable ?? []).filter((v) => v.key?.trim());
-			await validateTemplate(ctx, itemIndex, baseUrl, body.template_id, variables);
+			validateVariableKeys(ctx, itemIndex, variables);
 			if (variables.length) {
 				body.template_variables = variables;
 			}
@@ -217,12 +222,22 @@ export const sendRcsOperation: OperationDef = {
 		const delayMs = Math.min(Math.max(Number(options.delayMs) || 0, 0), 60000);
 		if (delayMs && itemIndex > 0) await sleep(delayMs);
 
-		const response = await llRequest(ctx, itemIndex, {
-			method: 'POST',
-			url,
-			body,
-			retryWhenBusy: options.retryWhenBusy === true,
-		});
+		// Send straight away: agent/template are only looked up if the API refuses the send
+		let response: unknown;
+		try {
+			response = await llRequest(ctx, itemIndex, {
+				method: 'POST',
+				url,
+				body,
+				retryWhenBusy: options.retryWhenBusy === true,
+			});
+		} catch (error) {
+			await explainRcsFailure(ctx, itemIndex, baseUrl, error, {
+				agentId: body.agent_id,
+				templateId: body.template_id,
+				variables: body.template_variables ?? [],
+			});
+		}
 
 		return { request: { url, body }, response };
 	},
